@@ -1,0 +1,1670 @@
+Projeto minhasfinancas
+=========================================================
+package com.example.minhasfinancas.api.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class AtualizaStatusDTO {
+
+	private String status;
+}
+===================================================
+package com.example.minhasfinancas.api.dto;
+
+import java.math.BigDecimal;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class LancamentoDTO {
+	
+	private Long id;
+	private String descricao;
+	private Integer mes;
+	private Integer ano;
+	private BigDecimal valor;
+	private Long usuario;
+	private String tipo;
+	private String status;
+	
+}
+=====================================================
+package com.example.minhasfinancas.api.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UsuarioDTO {
+	
+	private String email;
+	private String nome;
+	private String senha;
+	
+}
+=========================================================
+//Este pacote pode se chamar controller
+package com.example.minhasfinancas.api.resource;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.minhasfinancas.api.dto.AtualizaStatusDTO;
+import com.example.minhasfinancas.api.dto.LancamentoDTO;
+import com.example.minhasfinancas.exception.RegraNegocioException;
+import com.example.minhasfinancas.model.entity.Lancamento;
+import com.example.minhasfinancas.model.entity.Usuario;
+import com.example.minhasfinancas.model.enums.StatusLancamento;
+import com.example.minhasfinancas.model.enums.TipoLancamento;
+import com.example.minhasfinancas.service.LancamentoService;
+import com.example.minhasfinancas.service.UsuarioService;
+
+import lombok.RequiredArgsConstructor;
+
+@RestController
+@RequestMapping("/api/lancamentos")
+@RequiredArgsConstructor
+public class LancamentoResource {
+
+	private final LancamentoService service;
+	private final UsuarioService usuarioService;
+	
+	// Com a anotação @RequiredArgsConstructor faz o funcionamento do comando abaixo
+	// Não precisando passar os parâmetros criados para LancamentoResource o construtor
+	/*public LancamentoResource(LancamentoService service, UsuarioService usuarioService) {
+		this.service = service;	
+		this.usuarioService = usuarioService;
+	}*/
+	
+	@GetMapping
+	public ResponseEntity buscar(
+			@RequestParam(value  = "descricao", required = false) String descricao,
+			@RequestParam(value  = "mes", required = false) Integer mes,
+			@RequestParam(value =  "ano", required = false) Integer ano,
+			@RequestParam("usuario") Long idUsuario
+			) {
+		Lancamento lancamentoFiltro = new Lancamento();
+		lancamentoFiltro.getDescricao();
+		lancamentoFiltro.setMes(mes);
+		lancamentoFiltro.setAno(ano);
+		
+		Optional<Usuario> usuario = usuarioService.obterPorId(idUsuario);
+		
+		if(!usuario.isPresent()) {
+			return ResponseEntity.badRequest().body("Não foi possível realizar a consulta. Usuário não encontrado para o Id informado.");
+		}else {
+			lancamentoFiltro.setUsuario(usuario.get());
+		}
+		
+		List<Lancamento> lancamentos = service.buscar(lancamentoFiltro);
+		return ResponseEntity.ok(lancamentos);
+	}
+	
+	@GetMapping("{id}")
+	public ResponseEntity obterLancamento( @PathVariable("id") Long id) {
+		return service.obterPorId(id)
+				.map(lancamento -> new ResponseEntity(converter(lancamento), HttpStatus.OK))
+				.orElseGet( () -> new ResponseEntity(HttpStatus.NOT_FOUND) );
+	}
+	
+	@PostMapping
+	public ResponseEntity salvar( @RequestBody LancamentoDTO dto ) {
+		
+		try {
+			
+			Lancamento entidade = converter(dto);
+			entidade = service.salvar(entidade);
+			return new ResponseEntity(entidade, HttpStatus.CREATED);
+			
+			
+		} catch (RegraNegocioException e) {
+			return ResponseEntity.badRequest().body(e.getMessage());
+		}
+		
+	}
+	
+	@PutMapping("{id}")
+	public ResponseEntity atualizar( @PathVariable("id") Long id, @RequestBody LancamentoDTO dto) {
+		return service.obterPorId(id).map(entity ->{
+			try {
+				
+				Lancamento lancamento = converter(dto);
+				lancamento.setId(entity.getId());
+				service.atualizar(lancamento);
+				return ResponseEntity.ok(lancamento);
+			} catch (RegraNegocioException e) {
+				
+				return ResponseEntity.badRequest().body(e.getMessage());
+			}
+		}).orElseGet( () -> new ResponseEntity("Lançamento não encontrado na base de dados.", HttpStatus.BAD_REQUEST));
+	}
+	
+	@PutMapping("{id}/atualiza-status")
+	public ResponseEntity atualizarStatus(@PathVariable("id") Long id, @RequestBody AtualizaStatusDTO dto ) {
+		return service.obterPorId(id).map( entity -> {
+			StatusLancamento statusSelecionado = StatusLancamento.valueOf(dto.getStatus());
+			
+			if(statusSelecionado == null) {
+				return ResponseEntity.badRequest().body("Não foi possível atualizar o status do lançamento, envie um status válido.");
+			}
+			try {
+				
+				entity.setStatus(statusSelecionado);
+				service.atualizar(entity);
+				return ResponseEntity.ok(entity);
+				
+			} catch (RegraNegocioException e) {
+				
+				return ResponseEntity.badRequest().body(e.getMessage());
+			}
+		
+		}).orElseGet( () -> new ResponseEntity("Lançamento não encontrado na base de dados.", HttpStatus.BAD_REQUEST));
+	}
+	
+	@DeleteMapping("{id}")
+	public ResponseEntity deletar( @PathVariable("id") Long id) {
+		return service.obterPorId(id).map( entidade -> {
+			service.deletar(entidade);
+			return new ResponseEntity(HttpStatus.NO_CONTENT);
+			
+		}).orElseGet( () -> new ResponseEntity("Lançamento não encontrado na base de dados.", HttpStatus.BAD_REQUEST));
+	}
+	
+	private LancamentoDTO converter(Lancamento lancamento) {
+		return LancamentoDTO.builder()
+				.id(lancamento.getId())
+				.descricao(lancamento.getDescricao())
+				.valor(lancamento.getValor())
+				.mes(lancamento.getMes())
+				.ano(lancamento.getAno())
+				.status(lancamento.getStatus().name())
+				.tipo(lancamento.getTipo().name())
+				.usuario(lancamento.getUsuario().getId())
+				.build();
+	}
+	
+	private Lancamento converter(LancamentoDTO dto) {
+		
+		Lancamento lancamento = new Lancamento();
+		lancamento.setId(dto.getId());
+		lancamento.setDescricao(dto.getDescricao());
+		lancamento.setAno(dto.getAno());
+		lancamento.setMes(dto.getMes());
+		lancamento.setValor(dto.getValor());
+		
+		Usuario usuario = usuarioService.obterPorId(dto.getUsuario())
+		.orElseThrow( () -> new RegraNegocioException("Usuário não encontrado para o Id informado."));
+		
+		lancamento.setUsuario(usuario);
+		
+		if(dto.getTipo() != null) {
+			lancamento.setTipo(TipoLancamento.valueOf(dto.getTipo()));
+		}
+		
+		if(dto.getStatus() != null) {
+			lancamento.setStatus(StatusLancamento.valueOf(dto.getStatus()));
+		
+		}
+		return lancamento;
+	}
+}
+
+===========================================================================================
+//Este pacote pode se chamar controller
+//Usamos este nome por causa do projeto criado na aula
+package com.example.minhasfinancas.api.resource;
+
+import java.math.BigDecimal;
+import java.util.Optional;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.minhasfinancas.api.dto.UsuarioDTO;
+import com.example.minhasfinancas.exception.ErroAutenticacao;
+import com.example.minhasfinancas.exception.RegraNegocioException;
+import com.example.minhasfinancas.model.entity.Usuario;
+import com.example.minhasfinancas.service.LancamentoService;
+import com.example.minhasfinancas.service.UsuarioService;
+
+import lombok.RequiredArgsConstructor;
+
+@RestController
+@RequestMapping("/api/usuarios")
+@RequiredArgsConstructor
+public class UsuarioResource {
+
+	private final UsuarioService service;
+	private final LancamentoService lancamentoService;
+	
+	// Com a anotação @RequiredArgsConstructor faz o funcionamento do comando abaixo
+	// Não precisando passar os parâmetros criados para UsuarioResource o construtor
+	/*public UsuarioResource(UsuarioService service) {
+		this.service = service;
+	}*/
+	
+	@PostMapping("/autenticar")
+	public ResponseEntity autenticar( @RequestBody UsuarioDTO dto) {
+		try {
+			
+			Usuario usuarioAutenticado = service.autenticar(dto.getEmail(), dto.getSenha());
+			return ResponseEntity.ok(usuarioAutenticado);
+			
+		} catch (ErroAutenticacao e) {
+			return ResponseEntity.badRequest().body(e.getMessage());
+		}
+	}
+	
+	@PostMapping
+	public ResponseEntity salvar( @RequestBody UsuarioDTO dto) {
+		Usuario usuario = Usuario.builder().nome(dto.getNome())
+				.email(dto.getEmail())
+				.senha(dto.getSenha()).build();
+		
+		try {
+			
+			Usuario usuarioSalvo = service.salvarUsuario(usuario);
+			return new ResponseEntity(usuarioSalvo, HttpStatus.CREATED);
+			
+		} catch (RegraNegocioException e) {
+			return ResponseEntity.badRequest().body(e.getMessage());
+		}
+	}
+	
+	@GetMapping("{id}/saldo")
+	public ResponseEntity obterSaldo(@PathVariable("id") Long id) {
+		Optional<Usuario> usuario = service.obterPorId(id);
+		
+		if(!usuario.isPresent()) {
+			return new ResponseEntity(HttpStatus.NOT_FOUND);
+		}
+		
+		BigDecimal saldo =lancamentoService.obterSaldoPorUsuario(id);
+		return ResponseEntity.ok(saldo);
+	}
+	
+}
+
+========================================================================================
+package com.example.minhasfinancas.exception;
+
+public class ErroAutenticacao extends RuntimeException{
+	
+	public ErroAutenticacao(String mensagem) {
+		super(mensagem);
+	}
+}
+========================================================================================
+package com.example.minhasfinancas.exception;
+
+public class RegraNegocioException extends RuntimeException{
+
+	public RegraNegocioException(String msg) {
+		super(msg);
+	}
+}
+========================================================================================
+package com.example.minhasfinancas.model.entity;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+import javax.persistence.Column;
+import javax.persistence.Convert;
+import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.Table;
+
+import org.springframework.data.jpa.convert.threeten.Jsr310JpaConverters;
+
+import com.example.minhasfinancas.model.enums.StatusLancamento;
+import com.example.minhasfinancas.model.enums.TipoLancamento;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Entity
+@Table( name = "lancamento", schema = "financas")
+@Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class Lancamento {
+	
+	@Id
+	@GeneratedValue( strategy = GenerationType.IDENTITY)
+	@Column (name = "id")
+	private Long id;
+	
+	@Column(name = "descricao")
+	private String descricao;
+	
+	@Column (name = "mes")
+	private Integer mes;
+	
+	@Column (name = "ano")
+	private Integer ano;
+	
+	@ManyToOne
+	@JoinColumn(name = "id_usuario")
+	private Usuario usuario;
+	
+	@Column (name = "valor")
+	private BigDecimal valor;
+	
+	@Column(name = "data_cadastro")
+	@Convert(converter = Jsr310JpaConverters.LocalDateConverter.class)
+	private LocalDate dataCadastro;
+
+	@Column(name = "tipo")
+	@Enumerated(value = EnumType.STRING)
+	private TipoLancamento tipo;
+	
+	@Column(name = "status")
+	@Enumerated(value = EnumType.STRING)
+	private StatusLancamento status;
+
+}
+=========================================================================================
+package com.example.minhasfinancas.model.entity;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Table;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Entity
+@Table( name = "usuario", schema = "financas")
+@Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class Usuario {
+	
+	@Id
+	@Column(name = "id")
+	@GeneratedValue( strategy = GenerationType.IDENTITY )
+	private Long id;
+	
+	@Column (name = "nome")
+	private String nome;
+	
+	@Column (name = "email")
+	private String email;
+	
+	@Column (name= "senha")
+	@JsonIgnore
+	private String senha;
+	
+}
+===========================================================================================
+package com.example.minhasfinancas.model.enums;
+
+public enum StatusLancamento {
+
+	PENDENTE,
+	CANCELADO,
+	EFETIVADO
+}
+===========================================================================================
+package com.example.minhasfinancas.model.enums;
+
+public enum TipoLancamento {
+
+	RECEITA,
+	DESPESA
+
+}
+===========================================================================================
+package com.example.minhasfinancas.model.repository;
+
+import java.math.BigDecimal;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.example.minhasfinancas.model.entity.Lancamento;
+import com.example.minhasfinancas.model.enums.TipoLancamento;
+
+public interface LancamentoRepository extends JpaRepository<Lancamento, Long>{
+
+	@Query( value = 
+			"select sum(l.valor) from Lancamento l join l.usuario u "
+			+ "where u.id = :idUsuario and l.tipo = :tipo group by u")
+	BigDecimal obterSaldoPorTipoLancamentoEUsuario( @Param("idUsuario") Long idUsuario,
+			@Param("tipo") TipoLancamento tipo); 
+}
+===========================================================================================
+package com.example.minhasfinancas.model.repository;
+
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.example.minhasfinancas.model.entity.Usuario;
+
+public interface UsuarioRepository extends JpaRepository<Usuario, Long>{
+
+	boolean existsByEmail(String email);
+	
+	Optional<Usuario> findByEmail(String email);
+}
+===========================================================================================
+package com.example.minhasfinancas.service.impl;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+import org.springframework.data.domain.Example;
+import org.springframework.data.domain.ExampleMatcher;
+import org.springframework.data.domain.ExampleMatcher.StringMatcher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.minhasfinancas.exception.RegraNegocioException;
+import com.example.minhasfinancas.model.entity.Lancamento;
+import com.example.minhasfinancas.model.enums.StatusLancamento;
+import com.example.minhasfinancas.model.enums.TipoLancamento;
+import com.example.minhasfinancas.model.repository.LancamentoRepository;
+import com.example.minhasfinancas.service.LancamentoService;
+
+	
+
+@Service
+public class LancamentoServiceImpl implements LancamentoService {
+
+	private LancamentoRepository repository; 
+	
+	public LancamentoServiceImpl(LancamentoRepository repository) {
+		this.repository = repository;
+	}
+	
+	@Override
+	@Transactional
+	public Lancamento salvar(Lancamento lancamento) {
+		validar(lancamento);
+		lancamento.setStatus(StatusLancamento.PENDENTE);
+		return repository.save(lancamento);
+	}
+
+	@Override
+	@Transactional
+	public Lancamento atualizar(Lancamento lancamento) {
+		Objects.requireNonNull(lancamento.getId());
+		validar(lancamento);
+		return repository.save(lancamento);
+	}
+
+	@Override
+	@Transactional
+	public void deletar(Lancamento lancamento) {
+		Objects.requireNonNull(lancamento.getId());
+		repository.delete(lancamento);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<Lancamento> buscar(Lancamento lancamentoFiltro) {
+		
+		Example example = Example.of(lancamentoFiltro,
+		ExampleMatcher.matching()
+				.withIgnoreCase()
+				.withStringMatcher(StringMatcher.CONTAINING)
+				);
+		
+		
+		return repository.findAll(example);
+	}
+
+	@Override
+	public void atualizarStatus(Lancamento lancamento, StatusLancamento status) {
+		lancamento.setStatus(status);
+		atualizar(lancamento);
+		
+	}
+
+	@Override
+	public void validar(Lancamento lancamento) {
+		
+		if(lancamento.getDescricao() == null || lancamento.getDescricao().trim().equals("")) {
+			throw new RegraNegocioException("Informe uma Descrição válida.");
+		}
+		
+		if(lancamento.getMes() == null || lancamento.getMes() > 12) {
+			throw new RegraNegocioException("Informe um Mês válido.");
+		}
+		
+		if(lancamento.getAno() == null || lancamento.getAno().toString().length() != 4) {
+			throw new RegraNegocioException("Informe um Ano válido.");
+		}
+		
+		if(lancamento.getUsuario() == null || lancamento.getUsuario().getId() == null) {
+			throw new RegraNegocioException("Informe um Usuário.");
+		}
+		
+		if(lancamento.getValor() == null || lancamento.getValor().compareTo(BigDecimal.ZERO) < 1) {
+			throw new RegraNegocioException("Informe um Valor válido.");
+		}
+		
+		if(lancamento.getTipo() == null) {
+			throw new RegraNegocioException("Informe um tipo de Lançamento.");
+		}
+	}
+
+	@Override
+	public Optional<Lancamento> obterPorId(Long id) {
+		
+		return repository.findById(id);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public BigDecimal obterSaldoPorUsuario(Long id) {
+		
+		BigDecimal receitas = repository.obterSaldoPorTipoLancamentoEUsuario(id, TipoLancamento.RECEITA);
+		BigDecimal despesa = repository.obterSaldoPorTipoLancamentoEUsuario(id, TipoLancamento.DESPESA);
+		
+		if(receitas == null) {
+			receitas = BigDecimal.ZERO;
+		}
+		
+		if(despesa == null) {
+			despesa = BigDecimal.ZERO;
+		}
+		
+		return receitas.subtract(despesa);
+	}
+
+}
+===========================================================================================
+package com.example.minhasfinancas.service.impl;
+
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.minhasfinancas.exception.ErroAutenticacao;
+import com.example.minhasfinancas.exception.RegraNegocioException;
+import com.example.minhasfinancas.model.entity.Usuario;
+import com.example.minhasfinancas.model.repository.UsuarioRepository;
+import com.example.minhasfinancas.service.UsuarioService;
+
+@Service
+public class UsuarioServiceImpl implements UsuarioService{
+
+	private UsuarioRepository repository;
+	
+	
+	public UsuarioServiceImpl(UsuarioRepository repository) {
+		super();
+		this.repository = repository;
+	}
+
+	@Override
+	public Usuario autenticar(String email, String senha) {
+		Optional<Usuario> usuario = repository.findByEmail(email);
+		
+		if(!usuario.isPresent()) {
+			throw new ErroAutenticacao("Usuário não encontrado para o email informado.");
+		}
+		
+		if(!usuario.get().getSenha().equals(senha)) {
+			throw new ErroAutenticacao("Senha inválida.");
+		}
+		
+		return usuario.get();
+	}
+
+	@Override
+	@Transactional
+	public Usuario salvarUsuario(Usuario usuario) {
+		validarEmail(usuario.getEmail());
+		return repository.save(usuario);
+	}
+
+	@Override
+	public void validarEmail(String email) {
+
+		boolean existe = repository.existsByEmail(email);
+		
+		if (existe) {
+			throw new RegraNegocioException("Já existe um usuário cadastrado com este email.");
+		}
+	}
+
+	@Override
+	public Optional<Usuario> obterPorId(Long id) {
+		return repository.findById(id);
+	}
+
+}
+===========================================================================================
+package com.example.minhasfinancas.service;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+
+import com.example.minhasfinancas.model.entity.Lancamento;
+import com.example.minhasfinancas.model.enums.StatusLancamento;
+
+public interface LancamentoService {
+	
+	Lancamento salvar(Lancamento lancamento);
+	
+	Lancamento atualizar(Lancamento lancamento);
+	
+	public void deletar(Lancamento lancamento);
+	
+	List<Lancamento> buscar ( Lancamento lancamentoFiltro );
+	
+	void atualizarStatus(Lancamento lancamento, StatusLancamento status);
+	
+	void validar(Lancamento lancamento);
+	
+	Optional<Lancamento> obterPorId(Long id);
+	
+	BigDecimal obterSaldoPorUsuario(Long id);
+	
+}
+===========================================================================================
+package com.example.minhasfinancas.service;
+
+import java.util.Optional;
+
+import com.example.minhasfinancas.model.entity.Usuario;
+
+public interface UsuarioService {
+	
+	Usuario autenticar(String email, String senha);
+	
+	Usuario salvarUsuario(Usuario usuario);
+	
+	void validarEmail(String email);
+	
+	Optional<Usuario> obterPorId(Long id);
+	
+	
+}
+===========================================================================================
+package com.example.minhasfinancas;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@SpringBootApplication
+@EnableWebMvc
+public class MinhasfinancasApplication implements WebMvcConfigurer{
+	
+	@Override
+	public void addCorsMappings(CorsRegistry registry) {
+		registry.addMapping("/**").allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS");
+	}
+	
+	public static void main(String[] args) {
+		SpringApplication.run(MinhasfinancasApplication.class, args);
+	}
+
+}
+===========================================================================================
+			     =================
+                  	     ||+++++++++++++||
+			     ||+PASTA TESTE+||
+                             ||+++++++++++++||
+                             =================
+*******************************************************************************************
+package com.example.minhasfinancas.api.resource;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+
+import com.example.minhasfinancas.api.dto.UsuarioDTO;
+import com.example.minhasfinancas.exception.ErroAutenticacao;
+import com.example.minhasfinancas.exception.RegraNegocioException;
+import com.example.minhasfinancas.model.entity.Usuario;
+import com.example.minhasfinancas.service.LancamentoService;
+import com.example.minhasfinancas.service.UsuarioService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+@ExtendWith(SpringExtension.class)
+@ActiveProfiles("test")
+@WebMvcTest(controllers = UsuarioResource.class)
+@AutoConfigureMockMvc
+public class UsuarioResourceTest {
+	
+	static final String API = "/api/usuarios";
+	static final MediaType JSON = MediaType.APPLICATION_JSON;
+	
+	@Autowired
+	MockMvc mvc;
+	
+	@MockBean
+	UsuarioService service;
+	
+	@MockBean
+	LancamentoService lancamentoService;
+	
+	@Test
+	public void deveAutenticarUmUsuario() throws Exception{
+		
+		//cenário
+		String email = "usuario@email.com";
+		String senha = "123";
+		
+		UsuarioDTO dto = UsuarioDTO.builder().email(email).senha(senha).build();
+		Usuario usuario = Usuario.builder().id(1l).email(email).senha(senha).build();
+	
+		Mockito.when(service.autenticar(email, senha)).thenReturn(usuario);
+		
+		String json = new ObjectMapper().writeValueAsString(dto);
+		
+		//execução e verificação
+		MockHttpServletRequestBuilder request = MockMvcRequestBuilders
+										.post(API.concat("/autenticar"))
+										.accept(JSON)
+										.contentType(JSON)
+										.content(json);
+		
+		mvc
+			.perform(request)
+			.andExpect(MockMvcResultMatchers.status().isOk())
+			.andExpect(MockMvcResultMatchers.jsonPath("id").value(usuario.getId()))
+			.andExpect(MockMvcResultMatchers.jsonPath("nome").value(usuario.getNome()))
+			.andExpect(MockMvcResultMatchers.jsonPath("email").value(usuario.getEmail()))
+			;
+	}
+	
+	@Test
+	public void deveRetornarBadRequestAoObterErroDeAutenticacao() throws Exception{
+		
+		//cenário
+		String email = "usuario@email.com";
+		String senha = "123";
+		
+		UsuarioDTO dto = UsuarioDTO.builder().email(email).senha(senha).build();
+		
+		Mockito.when(service.autenticar(email, senha)).thenThrow(ErroAutenticacao.class);
+		
+		String json = new ObjectMapper().writeValueAsString(dto);
+		
+		//execução e verificação
+		MockHttpServletRequestBuilder request = MockMvcRequestBuilders
+										.post(API.concat("/autenticar"))
+										.accept(JSON)
+										.contentType(JSON)
+										.content(json);
+		
+		mvc
+			.perform(request)
+			.andExpect(MockMvcResultMatchers.status().isBadRequest());
+	}
+	
+	@Test
+	public void deveCriarUmNovoUsuario() throws Exception{
+		
+		//cenário
+		String email = "usuario@email.com";
+		String senha = "123";
+		
+		UsuarioDTO dto = UsuarioDTO.builder().email("usuario@email.com").senha("123").build();
+		Usuario usuario = Usuario.builder().id(1l).email(email).senha(senha).build();
+	
+		Mockito.when(service.salvarUsuario(Mockito.any(Usuario.class))).thenReturn(usuario);
+		
+		String json = new ObjectMapper().writeValueAsString(dto);
+		
+		//execução e verificação
+		MockHttpServletRequestBuilder request = MockMvcRequestBuilders
+										.post(API)
+										.accept(JSON)
+										.contentType(JSON)
+										.content(json);
+		
+		mvc
+			.perform(request)
+			.andExpect(MockMvcResultMatchers.status().isCreated())
+			.andExpect(MockMvcResultMatchers.jsonPath("id").value(usuario.getId()))
+			.andExpect(MockMvcResultMatchers.jsonPath("nome").value(usuario.getNome()))
+			.andExpect(MockMvcResultMatchers.jsonPath("email").value(usuario.getEmail()))
+			;
+	}
+	
+	@Test
+	public void deveRetornarBadRequestAoTentarCriarUmUsuarioInvalido() throws Exception{
+		
+		//cenário
+		String email = "usuario@email.com";
+		String senha = "123";
+		
+		UsuarioDTO dto = UsuarioDTO.builder().email("usuario@email.com").senha("123").build();
+	
+		Mockito.when(service.salvarUsuario(Mockito.any(Usuario.class))).thenThrow(RegraNegocioException.class);
+		
+		String json = new ObjectMapper().writeValueAsString(dto);
+		
+		//execução e verificação
+		MockHttpServletRequestBuilder request = MockMvcRequestBuilders
+										.post(API)
+										.accept(JSON)
+										.contentType(JSON)
+										.content(json);
+		
+		mvc
+			.perform(request)
+			.andExpect(MockMvcResultMatchers.status().isBadRequest());
+	}
+}
+******************************************************************************************
+package com.example.minhasfinancas.model.repository;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+import com.example.minhasfinancas.model.entity.Lancamento;
+import com.example.minhasfinancas.model.enums.StatusLancamento;
+import com.example.minhasfinancas.model.enums.TipoLancamento;
+
+@ExtendWith(SpringExtension.class)
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = Replace.NONE)
+@ActiveProfiles("test")
+public class LancamentoRepositoryTest {
+	
+	@Autowired
+	LancamentoRepository repository;
+	
+	@Autowired
+	TestEntityManager entityManager;
+	
+	
+	@Test
+	public void deveSalvarUmLancamento() {
+		Lancamento lancamento = criarLancamento();
+		
+		repository.save(lancamento);
+		
+		assertThat(lancamento.getId()).isNotNull();
+	}
+	
+	@Test
+	public void deveDeletarUmLancamento() {
+		
+		Lancamento lancamento = criarEPersistirUmLancamento();
+		
+		lancamento = entityManager.find(Lancamento.class, lancamento.getId());
+		
+		repository.delete(lancamento);
+		
+		Lancamento lancamentoInexistente = entityManager.find(Lancamento.class, lancamento.getId());
+		assertThat(lancamentoInexistente).isNull();
+		
+	}
+
+	@Test
+	public void deveAtualizarUmLancamento() {
+		Lancamento lancamento = criarEPersistirUmLancamento();
+		
+		lancamento.setAno(2021);
+		lancamento.setDescricao("Teste Atualizar");
+		lancamento.setStatus(StatusLancamento.CANCELADO);
+		repository.save(lancamento);
+		
+		Lancamento lancamentoAtualizado = entityManager.find(Lancamento.class, lancamento.getId());
+	
+		assertThat(lancamentoAtualizado.getAno()).isEqualTo(2021);
+		assertThat(lancamentoAtualizado.getDescricao()).isEqualTo("Teste Atualizar");
+		assertThat(lancamentoAtualizado.getStatus()).isEqualTo(StatusLancamento.CANCELADO);
+		
+	}
+	
+	@Test
+	public void deveBuscarUmLancamentoPorId() {
+		Lancamento lancamento = criarEPersistirUmLancamento();
+		
+		Optional<Lancamento> lancamentoEncontrado = repository.findById(lancamento.getId());
+		assertThat(lancamentoEncontrado.isPresent()).isTrue();
+	}
+	
+	private Lancamento criarEPersistirUmLancamento() {
+		Lancamento lancamento = criarLancamento();
+		entityManager.persist(lancamento);
+		return lancamento;
+	}
+	
+	public static Lancamento criarLancamento() {
+		return Lancamento.builder()
+				.ano(2022)
+				.mes(1)
+				.descricao("Lancamento qualquer")
+				.valor(BigDecimal.valueOf(10))
+				.tipo(TipoLancamento.RECEITA)
+				.status(StatusLancamento.PENDENTE)
+				.dataCadastro(LocalDate.now())
+				.build();
+		
+	}
+}
+******************************************************************************************
+package com.example.minhasfinancas.model.repository;
+
+import java.util.Optional;
+
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+import com.example.minhasfinancas.model.entity.Usuario;
+
+@ExtendWith(SpringExtension.class)
+@ActiveProfiles("test")
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = Replace.NONE)
+public class UsuarioRepositoryTest {
+
+	@Autowired
+	UsuarioRepository repository;
+
+	@Autowired
+	TestEntityManager entityManager;
+
+	@Test
+	public void deveVerificarExistenciaDeUmEmail() {
+
+		// cenário
+		Usuario usuario = criarUsuario();
+		entityManager.persist(usuario);
+
+		// ação / execução
+		boolean result = repository.existsByEmail("usuario@email.com");
+
+		// verificação
+		Assertions.assertThat(result).isTrue();
+	}
+
+	@Test
+	public void deveRetornarFalsoQuandoNaoHouverUsuarioCadastradoComOEmail() {
+		// Cenário
+
+		// ação
+		boolean result = repository.existsByEmail("usuario@email.com");
+
+		// verificação
+		Assertions.assertThat(result).isFalse();
+	}
+
+	@Test
+	public void devePersistirUmUsuarioNaBaseDeDados() {
+		// cenário
+		Usuario usuario = criarUsuario();
+		
+		// ação
+		Usuario usuarioSalvo = repository.save(usuario);
+
+		// verificação
+		Assertions.assertThat(usuarioSalvo.getId()).isNotNull();
+	}
+
+	@Test
+	public void deveBuscarUmUsuarioPorEmail() {
+		// cenário
+		Usuario usuario = criarUsuario();
+		entityManager.persist(usuario);
+		
+		// verificação
+		Optional<Usuario> result = repository.findByEmail("usuario@email.com");
+		
+		Assertions.assertThat(result.isPresent()).isTrue();
+	}
+
+	@Test
+	public void deveRetornarVazioAoBuscarUsuarioPorEmailQuandoNaoExisteNaBase() {
+				
+		// verificação
+		Optional<Usuario> result = repository.findByEmail("usuario@email.com");
+		
+		Assertions.assertThat(result.isPresent()).isFalse();
+	}
+	
+	public static Usuario criarUsuario() {
+		
+
+		return Usuario
+				.builder()
+				.nome("usuario")
+				.email("usuario@email.com")
+				.senha("senha")
+				.build();
+	}
+}
+*******************************************************************************************
+package com.example.minhasfinancas.service;
+
+
+
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
+import org.springframework.data.domain.Example;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+import com.example.minhasfinancas.exception.RegraNegocioException;
+import com.example.minhasfinancas.model.entity.Lancamento;
+import com.example.minhasfinancas.model.entity.Usuario;
+import com.example.minhasfinancas.model.enums.StatusLancamento;
+import com.example.minhasfinancas.model.repository.LancamentoRepository;
+import com.example.minhasfinancas.model.repository.LancamentoRepositoryTest;
+import com.example.minhasfinancas.service.impl.LancamentoServiceImpl;
+
+
+
+@ExtendWith(SpringExtension.class)
+@ActiveProfiles("test")
+public class LancamentoServiceTeste {
+	
+	@SpyBean
+	LancamentoServiceImpl service;
+	@MockBean
+	LancamentoRepository repository;
+	
+	@Test
+	public void deveSalvarUmLancamento() {
+		
+		
+		//canário
+		Lancamento lancamentoASalvar = LancamentoRepositoryTest.criarLancamento();
+		Mockito.doNothing().when(service).validar(lancamentoASalvar);
+		
+		Lancamento lancamentoSalvo = LancamentoRepositoryTest.criarLancamento();
+		lancamentoSalvo.setId(1l);
+		lancamentoSalvo.setStatus(StatusLancamento.PENDENTE);
+		Mockito.when(repository.save(lancamentoASalvar)).thenReturn(lancamentoSalvo);
+		
+		//execução
+		Lancamento lancamento = service.salvar(lancamentoASalvar);
+		
+		//verificação
+		Assertions.assertThat(lancamento.getId()).isEqualTo(lancamentoSalvo.getId());
+		Assertions.assertThat(lancamento.getStatus()).isEqualTo(StatusLancamento.PENDENTE);
+	}
+	
+	@Test
+	public void naoDeveSalvarUmLancamentoQuandoHouverErroDeValidacao() {
+		
+		//canário
+		Lancamento lancamentoASalvar = LancamentoRepositoryTest.criarLancamento();
+		Mockito.doThrow(RegraNegocioException.class).when(service).validar(lancamentoASalvar);
+		
+		//execução e verificação
+		Assertions.catchThrowableOfType( () -> service.salvar(lancamentoASalvar), RegraNegocioException.class);
+		Mockito.verify(repository, Mockito.never()).save(lancamentoASalvar);
+	}
+	
+	@Test
+	public void deveAtualizarUmLancamento() {
+		
+		
+		//canário
+		Lancamento lancamentoSalvo = LancamentoRepositoryTest.criarLancamento();
+		lancamentoSalvo.setId(1l);
+		lancamentoSalvo.setStatus(StatusLancamento.PENDENTE);
+		
+		Mockito.doNothing().when(service).validar(lancamentoSalvo);
+		
+		Mockito.when(repository.save(lancamentoSalvo)).thenReturn(lancamentoSalvo);
+		
+		//execução
+		service.atualizar(lancamentoSalvo);
+		
+		//verificação
+		Mockito.verify(repository, Mockito.times(1)).save(lancamentoSalvo);
+		
+	}
+	
+	@Test
+	public void deveLancarErroAoTentarAtualizarUmLancamentoQueAindaNaoFoiSalvo() {
+		
+		//canário
+		Lancamento lancamento = LancamentoRepositoryTest.criarLancamento();
+		
+		//execução e verificação
+		Assertions.catchThrowableOfType( () -> service.atualizar(lancamento), NullPointerException.class);
+		Mockito.verify(repository, Mockito.never()).save(lancamento);
+	}
+	
+	@Test
+	public void deveDeletarUmLancamento() {
+		
+		//canário
+		Lancamento lancamento = LancamentoRepositoryTest.criarLancamento();
+		lancamento.setId(1l);
+		
+		//execução
+		service.deletar(lancamento);
+		
+		//verificação
+		Mockito.verify(repository).delete(lancamento);
+	}
+	
+	@Test
+	public void deveLancarErroAoTentarDeletarUmLancamentoQueAindaNaoFoiSalvo() {
+		
+		//canário
+		Lancamento lancamento = LancamentoRepositoryTest.criarLancamento();
+					
+		//execução
+		Assertions.catchThrowableOfType( () -> service.deletar(lancamento), NullPointerException.class);
+			
+		//verificação
+		Mockito.verify(repository, Mockito.never()).delete(lancamento);
+	}
+	
+	@Test
+	public void deveFiltrarLancamentos() {
+		
+		//cenário
+		Lancamento lancamento = LancamentoRepositoryTest.criarLancamento();
+		lancamento.setId(1l);
+		
+		List<Lancamento> lista = Arrays.asList(lancamento);
+		Mockito.when(repository.findAll(Mockito.any(Example.class))).thenReturn(lista);
+	
+		//execução
+		List<Lancamento> resultado = service.buscar(lancamento);
+		
+		//verificação
+		Assertions
+		.assertThat(resultado)
+		.isNotEmpty()
+		.hasSize(1)
+		.contains(lancamento);
+	}
+	
+	@Test
+	public void deveAtualizarOStatusDeUmLancamento() {
+		
+		//cenário
+		Lancamento lancamento = LancamentoRepositoryTest.criarLancamento();
+		lancamento.setId(1l);
+		lancamento.setStatus(StatusLancamento.PENDENTE);
+		
+		StatusLancamento novoStatus = StatusLancamento.EFETIVADO;
+		Mockito.doReturn(lancamento).when(service).atualizar(lancamento);
+		
+		//execução
+		service.atualizarStatus(lancamento, novoStatus);
+		
+		//verificações
+		Assertions.assertThat(lancamento.getStatus()).isEqualTo(novoStatus);
+		Mockito.verify(service).atualizar(lancamento);
+	}
+	
+	@Test
+	public void deveObterUmLancamentoPorId() {
+		
+		//cenário
+		Long id = 1l;
+		
+		Lancamento lancamento = LancamentoRepositoryTest.criarLancamento();
+		lancamento.setId(id);
+		
+		Mockito.when(repository.findById(id)).thenReturn(Optional.of(lancamento));
+		
+		//execução
+		Optional<Lancamento> resultado = service.obterPorId(id);
+		
+		//verificação
+		Assertions.assertThat(resultado.isPresent()).isTrue();
+	}
+
+	@Test
+	public void deveRetornarVazioQuandoOLancamentoNaoExiste() {
+		
+		//cenário
+		Long id = 1l;
+		
+		Lancamento lancamento = LancamentoRepositoryTest.criarLancamento();
+		lancamento.setId(id);
+		
+		Mockito.when(repository.findById(id)).thenReturn(Optional.empty());
+		
+		//execução
+		Optional<Lancamento> resultado = service.obterPorId(id);
+		
+		//verificação
+		Assertions.assertThat(resultado.isPresent()).isFalse();
+	}
+	
+	@Test
+	public void deveLancarErrosAoValidarUmLancamento() {
+		
+		Lancamento lancamento = new Lancamento();
+		
+		Throwable erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe uma Descrição válida.");
+	
+		lancamento.setDescricao("");
+		
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe uma Descrição válida.");
+
+		lancamento.setDescricao("Salario");
+		
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um Mês válido.");
+
+		lancamento.setAno(0);
+
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um Mês válido.");
+	
+		lancamento.setAno(13);
+		
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um Mês válido.");
+	
+		lancamento.setMes(1);
+		
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um Ano válido.");
+		
+		lancamento.setAno(202);
+		
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um Ano válido.");
+	
+		lancamento.setAno(2021);
+		
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um Usuário.");
+	
+		lancamento.setUsuario(new Usuario());
+		
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um Usuário.");
+			
+		lancamento.getUsuario().setId(1l);
+		
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um Valor válido.");
+	
+		lancamento.setValor(BigDecimal.ZERO);
+	
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um Valor válido.");
+	
+		lancamento.setValor(BigDecimal.valueOf(1));
+		
+		erro = Assertions.catchThrowable( () -> service.validar(lancamento));
+		Assertions.assertThat(erro).isInstanceOf(RegraNegocioException.class).hasMessage("Informe um tipo de Lançamento.");
+	
+		
+	}
+}
+******************************************************************************************
+package com.example.minhasfinancas.service;
+
+
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import org.junit.jupiter.api.Assertions;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+import com.example.minhasfinancas.exception.ErroAutenticacao;
+import com.example.minhasfinancas.exception.RegraNegocioException;
+import com.example.minhasfinancas.model.entity.Usuario;
+import com.example.minhasfinancas.model.repository.UsuarioRepository;
+import com.example.minhasfinancas.service.impl.UsuarioServiceImpl;
+
+
+
+
+@ExtendWith(SpringExtension.class)
+@ActiveProfiles("test")
+public class UsuarioServiceTest{
+	
+	@SpyBean
+	UsuarioServiceImpl service;
+	
+	@MockBean
+	UsuarioRepository repository;
+	
+	//@BeforeEach
+	//public void setUp() {
+		
+		//service = Mockito.spy(UsuarioServiceTest.class);
+		
+		//O @MockBean substitui o comando abaixo e ele já reconhece no repository
+		//repository = Mockito.mock(UsuarioRepository.class);
+		//service = new UsuarioServiceImpl(repository);
+		
+	//}
+	
+	@Test
+	public void deveSalvarUmUsuario() {
+		
+		//cenário
+		Mockito.doNothing().when(service).validarEmail(Mockito.anyString());
+		Usuario usuario = Usuario.builder()
+				.id(1l)
+				.nome("nome")
+				.email("email@email.com")
+				.senha("senha").build();
+		
+		Mockito.when(repository.save(Mockito.any(Usuario.class))).thenReturn(usuario);
+		
+		//ação
+		Usuario usuarioSalvo = service.salvarUsuario(new Usuario());
+		
+		//Verificação
+		assertThat(usuarioSalvo).isNotNull();
+		assertThat(usuarioSalvo.getId()).isEqualTo(1l);
+		assertThat(usuarioSalvo.getNome()).isEqualTo("nome");
+		assertThat(usuarioSalvo.getEmail()).isEqualTo("email@email.com");
+		assertThat(usuarioSalvo.getSenha()).isEqualTo("senha");
+		
+		
+	}
+	
+	@Test
+	public void naoDeveSalvarUmUsuarioComEmailJaCadastrado() {
+		Assertions.assertThrows(RegraNegocioException.class,() -> {
+			//cenário
+			String email = "email@email.com";
+			Usuario usuario = Usuario.builder().email(email).build();
+			Mockito.doThrow(RegraNegocioException.class).when(service).validarEmail(email);
+			
+			
+			//ação
+			service.salvarUsuario(usuario);
+			
+			//Verificação
+			Mockito.verify(repository, Mockito.never()).save(usuario);
+		});
+	}
+	
+	@Test
+	public void deveAutenticarUmUsuarioComSucesso() {
+		Assertions.assertDoesNotThrow(() -> {
+			// cenário
+			String email = "email@email.com";
+			String senha = "senha";
+			
+			Usuario usuario = Usuario.builder().email(email).senha(senha).id(1l).build();
+			Mockito.when(repository.findByEmail(email)).thenReturn(Optional.of(usuario));
+			
+			// ação
+			Usuario result = service.autenticar(email, senha);
+			
+			// verificação
+			assertThat(result).isNotNull();		
+		});
+	}
+	
+	@Test
+	public void deveLancarErroQuandoNaoEncontrarUsuarioCadastradoComOEmailInformado() {
+		
+			//cenário
+			Mockito.when(repository.findByEmail(Mockito.anyString())).thenReturn(Optional.empty());
+			
+			//ação
+			Throwable exception =  catchThrowable( () -> service.autenticar("email@email.com", "senha"));
+			
+			
+			//Verificação
+			assertThat(exception)
+			.isInstanceOf(ErroAutenticacao.class)
+			.hasMessage("Usuário não encontrado para o email informado.");
+			
+			//Esse comando e todo em um única linha mais quebrei as linhas
+			//para melhor visualização
+	}
+	
+	@Test
+	public void deveLancarErroQuandoSenhaNaoBater() {
+		//cenário
+		String senha ="senha";
+		Usuario usuario = Usuario.builder().email("email@email.com").senha(senha).build();
+		Mockito.when(repository.findByEmail(Mockito.anyString())).thenReturn(Optional.of(usuario));
+			
+		//ação
+		Throwable exception = catchThrowable( () ->  service.autenticar("email@email.com", "123"));
+		
+		//Verificação
+		assertThat(exception).isInstanceOf(ErroAutenticacao.class).hasMessage("Senha inválida.");
+	}
+		
+	
+	@Test
+	public void deveValidarEmail() {
+		Assertions.assertDoesNotThrow(() ->{
+			
+			// Cenário
+			Mockito.when(repository.existsByEmail(Mockito.anyString())).thenReturn(false);
+			
+			// ação
+			service.validarEmail("email@email.com");
+			
+		});
+	}
+	
+	
+	@Test
+	public void deveLancarErroAoValidarEmailQuandoExistirEmailCadastrado() {
+		Assertions.assertThrows(RegraNegocioException.class, () -> {
+			
+			// cenário
+			Mockito.when(repository.existsByEmail(Mockito.anyString())).thenReturn(true);
+			
+			// ação
+			service.validarEmail("email@email.com");
+			
+		});		
+		
+	}
+}
+===========================================================================================
+application.properties
+===========================================================================================
+spring.datasource.url=jdbc:postgresql://localhost:5432/minhasfinancas
+spring.datasource.username=postgres
+spring.datasource.password=romSantos@100
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+===========================================================================================
+application-test.properties
+===========================================================================================
+spring.datasource.url = jdbc:h2:mem:db;DB_CLOSE_DELAY=-1;INIT=CREATE SCHEMA IF NOT EXISTS financas
+spring.datasource.username = sa
+spring.datasource.password = sa
+spring.datasource.driver-class-name=org.h2.Driver
+
+===========================================================================================
+pom.xml
+===========================================================================================
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+	<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>2.6.4</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+	
+	<groupId>com.example</groupId>
+	<artifactId>minhasfinancas</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>minhasfinancas</name>
+	<description>Projeto para gerenciamento de finanças pessoais</description>
+	<properties>
+		<java.version>17</java.version>
+	</properties>
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-devtools</artifactId>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+	
+	
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
+===========================================================================================

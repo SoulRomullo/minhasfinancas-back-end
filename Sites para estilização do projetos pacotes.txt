@@ -1,0 +1,24 @@
+Site para usar themas e estilizar o projeto
+
+https://www.primefaces.org/primereact
+
+Inslando o pacate no projeto no prompt 
+
+yarn add primereact primeicons classnames react-transition-group
+
+Verificar nas depedências no arquivo package.json
+
+***primeicons
+***classnames
+***react-transition-group
+
+=====================================================================
+Outro site para estilizar o projeto
+
+https://reactstrap.github.io/?path=/story/home-installation--page
+
+=====================================================================
+Outro site para estilizar o projeto
+
+http://react-materialize.github.io/react-materialize/?path=/story/react-materialize--welcome
+

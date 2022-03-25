@@ -1,0 +1,9 @@
+Para instalar o lombok no spring tools devemos abrir o arquivo como administrador
+
+para isso devemos abrir o cmd
+
+e inserir o seguinte comando entrando na pasta local do arquivo lombok
+
+java -jar lombok.jar
+
+

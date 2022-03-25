@@ -1,0 +1,3 @@
+Link explicativo para corrigir erro de Cors na execusão do console
+
+https://www.baeldung.com/spring-cors

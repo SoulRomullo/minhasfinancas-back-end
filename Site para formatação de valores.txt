@@ -1,0 +1,9 @@
+Pacote de instalação para melhorar a formatação de valores 
+
+Site
+
+https://www.npmjs.com/package/currency-formatter
+
+Instalando no projeto pelo prompt de comando
+
+npm ou yarn add currency-formatter

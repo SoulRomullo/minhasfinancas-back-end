@@ -1,0 +1,5 @@
+Site para deixar a sua mensagem de erro com melhor aparência
+
+http://codeseven.github.io/toastr/
+
+Adicionando no projeto no prompt npm ou yarn add toastr

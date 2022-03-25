@@ -1,0 +1,3 @@
+documentação para usar a função Assertions.assert
+
+https://assertj.github.io/doc/

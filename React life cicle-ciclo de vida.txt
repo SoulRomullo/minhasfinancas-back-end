@@ -1,0 +1,3 @@
+Como funciona o ciclo de vida "life cicle" do react
+
+https://pt-br.reactjs.org/docs/state-and-lifecycle.html
